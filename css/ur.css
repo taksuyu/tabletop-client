@@ -1,0 +1,40 @@
+.ur-game {
+    display: flex;
+}
+
+.ur-board {
+    border: 1px solid black;
+    cursor: pointer;
+    width: 48px;
+    height: 48px;
+    box-shadow: 1em 1em 1em grey;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lane {
+    display: flex;
+    flex-direction: column;
+}
+
+.side {
+    justify-content: space-between;
+}
+
+.piece {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.black {
+    background-color: dark-grey;
+}
+
+.white {
+    background-color: light-grey;
+    border: 1px solid black;
+}

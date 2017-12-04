@@ -1,0 +1,10 @@
+#content {
+    display: flex;
+    flex-direction: column;
+
+    margin: 5% 10% 0% 10%;
+}
+
+#masthead {
+    font-size: 4em;
+}

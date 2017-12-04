@@ -1,0 +1,9 @@
+# psc-package
+output
+.psc-package
+
+# shake
+dist
+
+# stack
+.stack-work
