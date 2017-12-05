@@ -16,6 +16,7 @@ import DOM.Event.EventTarget as EET
 import DOM.HTML (window)
 import DOM.HTML.Location (href)
 import DOM.HTML.Window (location)
+import DOM.Node.ParentNode (QuerySelector(..))
 import DOM.Websocket.Event.EventTypes as WSET
 import DOM.Websocket.Event.MessageEvent as ME
 import DOM.Websocket.WebSocket as WS
@@ -30,7 +31,8 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (mempty)
 import Data.String as S
 import Data.Tuple (Tuple(..), fst, snd)
-import Data.URI (Query(..), URI(..), runParseURI)
+import Data.URI (Query(..), URI(..))
+import Data.URI.URI (parse)
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.HTML as HH
@@ -311,18 +313,24 @@ main = do
   loc <- location w
   uri <- href loc
   HA.runHalogenAff do
-    body <- HA.awaitBody
-    io <- runUI ui (maybe Nothing id $
-          case runParseURI uri of
-            Right (URI _ _ (Just (Query qu)) _) ->
-              Just $ L.foldr
-                (\a b -> case b of
-                    Just _ -> b
-                    Nothing -> if fst a == "game" then snd a else Nothing
-                ) Nothing qu
-            _ ->
-              Nothing)
-          body
+    element <- do
+      sElement <- HA.selectElement (QuerySelector "#content")
+      body <- HA.awaitBody
+      case sElement of
+        Just content -> pure content
+        _            -> pure body
+
+    io <- runUI ui (
+      case parse uri of
+        Right (URI _ _ (Just (Query qu)) _) ->
+          L.foldr
+          (\ a b -> case b of
+              Just _ -> b
+              Nothing -> if fst a == "game" then snd a else Nothing
+          ) Nothing qu
+        _ ->
+          Nothing
+      ) element
 
     io.subscribe $ wsSender ws
 

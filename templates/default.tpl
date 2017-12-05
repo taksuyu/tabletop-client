@@ -8,7 +8,7 @@
   <body>
     <div id="content">
       <content-body />
-      <content-body-end />
     </div>
+    <content-body-end />
   </body>
 </html>

@@ -1,7 +1,7 @@
 <apply template="default">
   <bind tag="content-head">
     <title>Tabletop</title>
-    <link rel="stylesheet" href="css/index.css" />
+    <link rel="stylesheet" href="/css/index.css" />
   </bind>
 
   <bind tag="content-body">
