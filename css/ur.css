@@ -7,10 +7,13 @@
     cursor: pointer;
     width: 48px;
     height: 48px;
-    box-shadow: 1em 1em 1em grey;
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.ur-placemarker {
+    background-color: gainsboro;
 }
 
 .lane {
@@ -31,10 +34,10 @@
 }
 
 .black {
-    background-color: dark-grey;
+    background-color: black;
 }
 
 .white {
-    background-color: light-grey;
+    background-color: white;
     border: 1px solid black;
 }
