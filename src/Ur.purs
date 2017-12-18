@@ -40,13 +40,9 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
 import Network.HTTP.Affjax as AX
-
 import Tabletop.Config (tabletopUrWebSocket)
-import Tabletop.Message.Types
-  ( ChannelInfo(..), ConnectionData(..), NextTurn(..), Player(..), Side(..)
-  , UrBoard(..), UrClientMessage(..), UrServerMessage(..)
-  , showPlayer, showTurn
-  )
+import Tabletop.Message (ChannelInfo(..), SystemMessage(..), TabletopMessage(..), TabletopResponse(..))
+import Tabletop.Message.Ur (NextTurn(..), Player(..), Side(..), UrBoard(..), UrMessage(..), UrResponse(..), UrTabletopMessage, UrTabletopResponse, showPlayer, showTurn)
 
 data UrQuery a
   = MovePiece Int a
@@ -61,6 +57,7 @@ data UrQuery a
   | BecomePlayer Player a
   | ConfirmBecomePlayer Player a
 
+  | SetConnection ChannelInfo a
   | SetGame UrBoard a
   | SetMessage UserMessage a
 
@@ -226,7 +223,7 @@ renderGame (UrBoard{ black: black@Side{ scored: blackScored }, white: white@Side
           , hasPiece: false
           }
 
-ui :: forall eff. H.Component HH.HTML UrQuery (Maybe String) (ConnectionData UrClientMessage) (Aff (HA.HalogenEffects (ajax :: AX.AJAX, console :: CONSOLE | eff)))
+ui :: forall eff. H.Component HH.HTML UrQuery (Maybe String) UrTabletopMessage (Aff (HA.HalogenEffects (ajax :: AX.AJAX, console :: CONSOLE | eff)))
 ui = H.component
   { initialState
   , render
@@ -234,13 +231,13 @@ ui = H.component
   , receiver: const Nothing
   }
 
-eval :: forall eff. UrQuery ~> H.ComponentDSL UrState UrQuery (ConnectionData UrClientMessage) (Aff (HA.HalogenEffects (ajax :: AX.AJAX, console :: CONSOLE | eff)))
+eval :: forall eff. UrQuery ~> H.ComponentDSL UrState UrQuery UrTabletopMessage (Aff (HA.HalogenEffects (ajax :: AX.AJAX, console :: CONSOLE | eff)))
 eval = case _ of
   MovePiece p next -> do
     state <- H.get
     case state.connection of
       Just (ChannelInfo{ uuid }) ->
-        H.raise $ ConnectionData uuid "UrService" $ Move p
+        H.raise $ ServiceMessage uuid "UrService" (Move p)
       Nothing ->
         H.modify (_ { error = show $ Error "No valid service information." })
     pure next
@@ -256,7 +253,7 @@ eval = case _ of
     state <- H.get
     case state.connection of
       Just (ChannelInfo{ uuid }) ->
-        H.raise $ ConnectionData uuid "UrService" $ PassTurn
+        H.raise $ ServiceMessage uuid "UrService" $ PassTurn
       Nothing ->
         H.modify (_ { error = show $ Error "No valid service information." })
     pure next
@@ -269,25 +266,18 @@ eval = case _ of
         H.modify (_ { error = show $ Error "Game is not in progress, but received a pass from server." })
     pure next
   StartGame next -> do
-    response <- H.liftAff $ AX.get ("/games/ur/start")
-    case decodeJson response.response :: Either String ChannelInfo of
-      Right chanInfo@(ChannelInfo{ uuid }) -> do
-        -- TODO: Should check if UrService is an active module and either log or
-        -- alert otherwise.
-        H.raise $ ConnectionData uuid "UrService" GetCurrentGame
-        H.modify (_ { connection = Just chanInfo })
-      Left str -> H.modify (_ { error = str })
+    H.raise $ SystemMessage CreateGame
     pure next
   JoinGame uuid next -> do
     H.liftAff $ log "about to send"
-    H.raise $ ConnectionData uuid "UrService" $ GetCurrentGame
+    H.raise $ ServiceMessage uuid "UrService" $ GetCurrentGame
     H.modify (_ { connection = Just $ ChannelInfo { uuid, modules: mempty } })
     pure next
   BecomePlayer player next -> do
     state <- H.get
     case state.connection of
       Just (ChannelInfo{ uuid }) ->
-        H.raise $ ConnectionData uuid "UrService" $ Join player
+        H.raise $ ServiceMessage uuid "UrService" $ Join player
       Nothing ->
         H.modify (_ { error = show $ Error "No valid service information." })
     pure next
@@ -298,6 +288,10 @@ eval = case _ of
         H.modify (_ { mode = GameInProgress (PlayerMode player) board })
       _ ->
         H.modify (_ { error = show $ Error "Game is not in progress, but received a join from server. "})
+    pure next
+  SetConnection chanInfo@(ChannelInfo { uuid }) next -> do
+    H.modify (_ { connection = Just chanInfo })
+    H.raise $ ServiceMessage uuid "UrService" $ GetCurrentGame
     pure next
   SetGame board next -> do
     H.modify (_ { mode = GameInProgress Spectator board })
@@ -355,34 +349,37 @@ wsProducer socket = CRA.produce \emit ->
 -- Understanding what I got through the websocket
 wsConsumer :: forall eff. (UrQuery ~> Aff (HA.HalogenEffects eff)) -> CR.Consumer String (Aff (HA.HalogenEffects eff)) Unit
 wsConsumer query = CR.consumer \msg -> do
-  query $ H.action $ case (decodeJson =<< jsonParser msg) :: Either String UrServerMessage of
+  query $ H.action $ case (decodeJson =<< jsonParser msg) :: Either String UrTabletopResponse of
     Right serverMsg -> case serverMsg of
-      CurrentGame board ->
-        SetGame board
-      JoinSuccess player ->
-        ConfirmBecomePlayer player
-      JoinSuccessOther player ->
-        SetMessage $ Info (showPlayer player <> " has joined!")
-      -- TODO: If a join fails we should reset the state
-      JoinFailure str ->
-        SetMessage $ Info str
-      MoveSuccess board ->
-        ConfirmMove board
-      MoveFailure str ->
-        SetMessage $ Info str
-      PassSuccess nextTurn ->
-        ConfirmPass nextTurn
-      PassFailure str ->
-        SetMessage $ Info str
+      SystemResponse chanInfo ->
+        SetConnection chanInfo
+      ServiceResponse r -> case r of
+        CurrentGame board ->
+          SetGame board
+        JoinSuccess player ->
+          ConfirmBecomePlayer player
+        JoinSuccessOther player ->
+          SetMessage $ Info (showPlayer player <> " has joined!")
+        -- TODO: If a join fails we should reset the state
+        JoinFailure str ->
+          SetMessage $ Info str
+        MoveSuccess board ->
+          ConfirmMove board
+        MoveFailure str ->
+          SetMessage $ Info str
+        PassSuccess nextTurn ->
+          ConfirmPass nextTurn
+        PassFailure str ->
+          SetMessage $ Info str
 
-      -- TODO: Change the state or allow users to start a new game.
-      PlayerHasWon player ->
-        SetMessage $ Info (showPlayer player <> " has won!")
+        -- TODO: Change the state or allow users to start a new game.
+        PlayerHasWon player ->
+          SetMessage $ Info (showPlayer player <> " has won!")
     Left str -> SetMessage $ Error str
   pure Nothing
 
 -- What I'm sending through the websocket
-wsSender :: forall eff. WS.WebSocket -> CR.Consumer (ConnectionData UrClientMessage) (Aff (HA.HalogenEffects (dom :: DOM | eff))) Unit
+wsSender :: forall eff. WS.WebSocket -> CR.Consumer UrTabletopMessage (Aff (HA.HalogenEffects (dom :: DOM | eff))) Unit
 wsSender socket = CR.consumer \msg -> do
   liftEff $ WS.sendString socket $ stringify $ encodeJson msg
   pure Nothing

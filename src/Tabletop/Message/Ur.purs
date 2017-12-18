@@ -1,46 +1,23 @@
-module Tabletop.Message.Types where
+module Tabletop.Message.Ur where
 
 import Prelude
 
 import Data.Argonaut (class DecodeJson, class EncodeJson, decodeJson, encodeJson, fromString, jsonEmptyObject, (.?), (:=), (~>))
 import Data.Either (Either(..))
-import Data.List as L
 import Data.Tuple (uncurry)
+import Tabletop.Message (ChannelInfo, SystemMessage, TabletopMessage, TabletopResponse)
 
-data ConnectionData c = ConnectionData String String c
+--- UrMessage ---
 
-instance encodeConnectionData :: EncodeJson c => EncodeJson (ConnectionData c) where
-  encodeJson (ConnectionData uuid mod c)
-     = "service" := mod
-    ~> "uuid" := uuid
-    ~> "message" := encodeJson c
-    ~> jsonEmptyObject
+type UrTabletopMessage = TabletopMessage SystemMessage String UrMessage
 
-newtype ChannelInfo
-  = ChannelInfo
-    { uuid :: String
-    , modules :: L.List String
-    }
-
-instance decodeChannelInfo :: DecodeJson ChannelInfo where
-  decodeJson json = do
-    obj <- decodeJson json
-    uuid <- obj .? "channelUUID"
-    modules <- obj .? "channelModules"
-    pure $ ChannelInfo { uuid: uuid, modules: modules }
-
-instance encodeChannelInfo :: EncodeJson ChannelInfo where
-  encodeJson (ChannelInfo info)
-     = "channelUUID" := info.uuid
-    ~> "channelModules" := info.modules
-
-data UrClientMessage
+data UrMessage
   = Join Player
   | Move Int
   | PassTurn
   | GetCurrentGame
 
-instance encodeUrClientMessage :: EncodeJson UrClientMessage where
+instance encodeUrMessage :: EncodeJson UrMessage where
   encodeJson = case _ of
     Join player ->
       "tag" := "Join"
@@ -56,39 +33,6 @@ instance encodeUrClientMessage :: EncodeJson UrClientMessage where
     GetCurrentGame ->
       "tag" := "GetCurrentGame"
       ~> jsonEmptyObject
-
-data NextTurn = NextTurn Turn Int
-
-instance decodeNextTurn :: DecodeJson NextTurn where
-  decodeJson json =
-    map (uncurry NextTurn) $ decodeJson json
-
-data UrServerMessage
-  = JoinSuccess Player
-  | JoinSuccessOther Player
-  | JoinFailure String
-  | MoveSuccess UrBoard
-  | MoveFailure String
-  | PassSuccess NextTurn
-  | PassFailure String
-  | CurrentGame UrBoard
-  | PlayerHasWon Player
-
-instance decodeUrServerMessage :: DecodeJson UrServerMessage where
-  decodeJson json = do
-    obj <- decodeJson json
-    tag <- obj .? "tag"
-    contents <- obj .? "contents"
-    case tag of
-      "JoinSuccess" -> map JoinSuccess $ decodeJson contents
-      "JoinSuccessOther" -> map JoinSuccessOther $ decodeJson contents
-      "JoinFailure" -> map JoinFailure $ decodeJson contents
-      "MoveSuccess" -> map MoveSuccess $ decodeJson contents
-      "PassSuccess" -> map PassSuccess $ decodeJson contents
-      "PassFailure" -> map PassFailure $ decodeJson contents
-      "CurrentGame" -> map CurrentGame $ decodeJson contents
-      "PlayerHasWon" -> map PlayerHasWon $ decodeJson contents
-      str -> Left $ "Expected UrServerMessage: " <> str
 
 data Player
   = PlayerBlack
@@ -160,3 +104,40 @@ instance decodeSide :: DecodeJson Side where
     path <- obj .? "path"
     scored <- obj .? "scored"
     pure $ Side { pieces, path, scored }
+
+--- UrResponse ---
+
+type UrTabletopResponse = TabletopResponse ChannelInfo UrResponse
+
+data UrResponse
+  = JoinSuccess Player
+  | JoinSuccessOther Player
+  | JoinFailure String
+  | MoveSuccess UrBoard
+  | MoveFailure String
+  | PassSuccess NextTurn
+  | PassFailure String
+  | CurrentGame UrBoard
+  | PlayerHasWon Player
+
+instance decodeUrResponse :: DecodeJson UrResponse where
+  decodeJson json = do
+    obj <- decodeJson json
+    tag <- obj .? "tag"
+    contents <- obj .? "contents"
+    case tag of
+      "JoinSuccess" -> map JoinSuccess $ decodeJson contents
+      "JoinSuccessOther" -> map JoinSuccessOther $ decodeJson contents
+      "JoinFailure" -> map JoinFailure $ decodeJson contents
+      "MoveSuccess" -> map MoveSuccess $ decodeJson contents
+      "PassSuccess" -> map PassSuccess $ decodeJson contents
+      "PassFailure" -> map PassFailure $ decodeJson contents
+      "CurrentGame" -> map CurrentGame $ decodeJson contents
+      "PlayerHasWon" -> map PlayerHasWon $ decodeJson contents
+      str -> Left $ "Expected UrTabletopResponse: " <> str
+
+data NextTurn = NextTurn Turn Int
+
+instance decodeNextTurn :: DecodeJson NextTurn where
+  decodeJson json =
+    map (uncurry NextTurn) $ decodeJson json
