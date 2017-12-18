@@ -63,12 +63,13 @@ main = do
     dist </> "css" </> "*.css" %> \out -> do
       let name = dropDirectory1 out
       need [ name ]
+      putNormal $ "# copy (for " `mappend` out `mappend` " )"
       copyFileChanged name out
 
-    dist </> "svg" </> "*.svg" %> \out -> do
-      let name = dropDirectory1 out
-      need [ name ]
-      copyFileChanged name out
+    -- dist </> "svg" </> "*.svg" %> \out -> do
+    --   let name = dropDirectory1 out
+    --   need [ name ]
+    --   copyFileChanged name out
 
     "output" <//> "*.js" %> \_ -> do
       pursFiles <- getDirectoryFiles "" ["src//*.purs"]
