@@ -3,7 +3,6 @@
 }
 
 .ur-board {
-    border: 1px solid black;
     cursor: pointer;
     width: 48px;
     height: 48px;
@@ -21,8 +20,61 @@
     flex-direction: column;
 }
 
+.lane > div > div {
+    border: 1px solid black;
+}
+
+.midLane div {
+    border: solid black;
+    border-width: 1px 2px 1px 2px;
+}
+
 .side {
     justify-content: space-between;
+}
+
+.side-black {
+    margin-right: -1px;
+}
+
+.side-black .ur-board {
+    border-left-width: 2px;
+}
+
+.side-black > div :first-child {
+    border-top-width: 2px;
+}
+
+.side-black > div :last-child {
+    border-bottom-width: 2px;
+}
+
+.side-white {
+    margin-left: -1px;
+}
+
+.side-white .ur-board {
+    border-right-width: 2px;
+}
+
+.side-white > div :first-child {
+    border-top-width: 2px;
+}
+
+.side-white > div :last-child {
+    border-bottom-width: 2px;
+}
+
+.midLane {
+    border-width: 1px 2px 2px 1px;
+}
+
+.midLane :first-child {
+    border-top-width: 2px;
+}
+
+.midLane :last-child {
+    border-bottom-width: 2px;
 }
 
 .piece {
