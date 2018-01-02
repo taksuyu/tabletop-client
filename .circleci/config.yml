@@ -22,6 +22,7 @@ jobs:
             - psc-package-v1-{{ arch }}-{{ .Branch }}-{{ checksum "psc-package.json" }}
 
       - run: stack build
+      - run: stack build psc-package
       - run: stack exec site
 
       - save_cache:
