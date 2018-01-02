@@ -21,7 +21,9 @@ jobs:
           keys:
             - psc-package-v1-{{ arch }}-{{ .Branch }}-{{ checksum "psc-package.json" }}
 
-      - run: stack build tabletop-client psc-package purescript
+      - run: stack build tabletop-client 
+      - run: stack build psc-package
+      - run: stack build purescript
       - run: stack exec site
 
       - save_cache:
