@@ -1,0 +1,33 @@
+version: 2
+jobs:
+  haskell-8.0.2:
+    docker:
+      - image: haskell:8.0.2
+    steps:
+      - run: stack --version
+
+      - checkout
+
+      - restore_cache:
+          keys:
+            - stack-8.0.2-v2-{{ arch }}-{{ .Branch }}-{{ checksum "package.yaml" }}-{{ checksum "stack.yaml" }}
+            - stack-8.0.2-v2-{{ arch }}-{{ .Branch }}-{{ checksum "package.yaml" }}-
+            - stack-8.0.2-v2-{{ arch }}-{{ .Branch }}-
+      - restore_cache:
+          keys:
+            - stack-work-8.0.2-v1-{{ arch }}-{{ .Branch }}-{{ checksum "stack.yaml" }}-{{ .Revision }}
+            - stack-work-8.0.2-v1-{{ arch }}-{{ .Branch }}-{{ checksum "stack.yaml" }}-
+      - run: stack build
+      - save_cache:
+          key: stack-8.0.2-v2-{{ arch }}-{{ .Branch }}-{{ checksum "package.yaml" }}-{{ checksum "stack.yaml" }}
+          paths:
+            - /root/.stack
+      - save_cache:
+          key: stack-work-8.0.2-v1-{{ arch }}-{{ .Branch }}-{{ checksum "stack.yaml" }}-{{ .Revision }}
+          paths:
+            - ".stack-work"
+workflows:
+  version: 2
+  ghc:
+    jobs:
+      - haskell-8.0.2
