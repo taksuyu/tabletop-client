@@ -3,6 +3,7 @@ output
 .psc-package
 
 # shake
+.shake
 dist
 
 # stack

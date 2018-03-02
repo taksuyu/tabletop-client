@@ -24,16 +24,17 @@ distFiles = fmap (dist </>) $ [ "index.html" ]
   -- `mappend` fmap ("svg" </>) []
   `mappend` fmap ("js" </>) [ "ur.bundle.js" ]
 
-main :: IO ()
-main = do
-  heist <- H.initHeist
-    ( H.emptyHeistConfig
+templates :: H.HeistConfig m
+templates = H.emptyHeistConfig
     & H.hcNamespace .~ mempty
     & H.hcLoadTimeSplices .~ H.defaultLoadTimeSplices
     & H.hcTemplateLocations .~ [H.loadTemplates "templates"]
-    )
 
-  shakeArgs shakeOptions{ shakeFiles = dist } $ do
+main :: IO ()
+main = do
+  heist <- H.initHeist templates
+
+  shakeArgs shakeOptions $ do
     want distFiles
 
     phony "clean" $ do
@@ -43,7 +44,8 @@ main = do
     dist <//> "*.html" %> \out -> do
       let templateName = dropDirectory1 $ out -<.> ""
 
-      -- NOTE: We want to track the templates so that they get rebuilt on changes
+      -- NOTE: We want to track the templates so that they get rebuilt on
+      -- changes
       files <- getDirectoryFiles "" ["templates//*.tpl"]
       need files
 
@@ -66,10 +68,10 @@ main = do
       putNormal $ "# copy (for " `mappend` out `mappend` " )"
       copyFileChanged name out
 
-    -- dist </> "svg" </> "*.svg" %> \out -> do
-    --   let name = dropDirectory1 out
-    --   need [ name ]
-    --   copyFileChanged name out
+    dist </> "svg" </> "*.svg" %> \out -> do
+      let name = dropDirectory1 out
+      need [ name ]
+      copyFileChanged name out
 
     "output" <//> "*.js" %> \_ -> do
       pursFiles <- getDirectoryFiles "" ["src//*.purs"]
