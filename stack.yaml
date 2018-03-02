@@ -1,18 +1,20 @@
-resolver: lts-9.14
+resolver: lts-9.21
 
 packages:
   - .
 
-  # Shake dependency
+  # Shake build tools
   - location:
       git: https://github.com/purescript/psc-package.git
       commit: 9ef4cab35a3c02a662873c8bf24cf64b07371cd0
     extra-dep: true
 
 extra-deps:
+  - purescript-0.11.6
+
   - heist-1.0.1.1
+  - pipes-http-1.0.5
   - map-syntax-0.2.0.2
   - xmlhtml-0.2.5.2
 
-  # Shake dependency
-  - purescript-0.11.7
+allow-newer: true
