@@ -1,46 +1,35 @@
 version: 2
 jobs:
-  haskell-8.0.2:
+  build:
     docker:
-      - image: haskell:8.0.2
+      - image: ubuntu:17.10
     steps:
+      - run: apt update && apt install -y wget
+      - run: wget -qO- https://get.haskellstack.org/ | sh
       - run: stack --version
-
       - checkout
 
       - restore_cache:
           keys:
-            - stack-8.0.2-v2-{{ arch }}-{{ .Branch }}-{{ checksum "tabletop-client.cabal" }}-{{ checksum "stack.yaml" }}
-            - stack-8.0.2-v2-{{ arch }}-{{ .Branch }}-{{ checksum "tabletop-client.cabal" }}-
-            - stack-8.0.2-v2-{{ arch }}-{{ .Branch }}-
+            - stack-v1-ghc-8.2.2-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+            - stack-v1-ghc-8.2.2-{{ arch }}-{{ .Branch }}
+            - stack-v1-ghc-8.2.2-{{ arch }}
       - restore_cache:
           keys:
-            - stack-work-8.0.2-v1-{{ arch }}-{{ .Branch }}-{{ checksum "stack.yaml" }}-{{ .Revision }}
-            - stack-work-8.0.2-v1-{{ arch }}-{{ .Branch }}-{{ checksum "stack.yaml" }}-
-      - restore_cache:
-          keys:
-            - psc-package-v1-{{ arch }}-{{ .Branch }}-{{ checksum "psc-package.json" }}
+            - psc-package-v1-{{ checksum "psc-package.json" }}-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+            - psc-package-v1-{{ checksum "psc-package.json" }}-{{ arch }}-{{ .Branch }}
+            - psc-package-v1-{{ checksum "psc-package.json" }}-{{ arch }}
 
-      - run: stack build tabletop-client
-      - run: stack build psc-package
-      - run: stack build purescript
+      - run: stack build --fast --pedantic tabletop-client
+      - run: stack build --fast --pedantic psc-package
+      - run: stack build --fast --pedantic purescript
       - run: stack exec site
 
       - save_cache:
-          key: stack-8.0.2-v2-{{ arch }}-{{ .Branch }}-{{ checksum "tabletop-client.cabal" }}-{{ checksum "stack.yaml" }}
+          key: stack-v1-ghc-8.2.2-{{ arch }}-{{ .Branch }}-{{ .Revision }}
           paths:
-            - /root/.stack
+            - "~/.stack"
       - save_cache:
-          key: stack-work-8.0.2-v1-{{ arch }}-{{ .Branch }}-{{ checksum "stack.yaml" }}-{{ .Revision }}
-          paths:
-            - ".stack-work"
-      - save_cache:
-          key: psc-package-v1-{{ arch }}-{{ .Branch }}-{{ checksum "psc-package.json" }}
+          key: psc-package-v1-{{ checksum "psc-package.json" }}-{{ arch }}-{{ .Branch }}-{{ .Revision }}
           paths:
             - ".psc-package"
-
-workflows:
-  version: 2
-  ghc:
-    jobs:
-      - haskell-8.0.2

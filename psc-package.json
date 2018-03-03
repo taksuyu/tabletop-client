@@ -3,15 +3,14 @@
     "set": "psc-0.11.7",
     "source": "https://github.com/purescript/package-sets.git",
     "depends": [
-        "uri",
-        "aff-coroutines",
-        "var",
-        "maps",
-        "exceptions",
-        "argonaut-generic",
-        "argonaut",
-        "affjax",
-        "halogen",
-        "prelude"
+      "aff-coroutines",
+      "argonaut",
+      "argonaut-generic",
+      "exceptions",
+      "halogen",
+      "maps",
+      "prelude",
+      "uri",
+      "var"
     ]
 }
