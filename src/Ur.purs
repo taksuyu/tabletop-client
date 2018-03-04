@@ -3,35 +3,23 @@ module Ur where
 import Prelude
 
 import Control.Coroutine as CR
-import Control.Coroutine.Aff as CRA
 import Control.Monad.Aff (Aff)
-import Control.Monad.Aff.AVar as AV
 import Control.Monad.Aff.Console (CONSOLE, log)
 import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.Eff.Exception (EXCEPTION)
-import Control.Monad.Except (runExcept)
 import DOM (DOM)
-import DOM.Event.EventTarget as EET
 import DOM.HTML (window)
-import DOM.HTML.Location (href)
+import DOM.HTML.Location (href, setHash)
 import DOM.HTML.Window (location)
 import DOM.Node.ParentNode (QuerySelector(..))
-import DOM.Websocket.Event.EventTypes as WSET
-import DOM.Websocket.Event.MessageEvent as ME
 import DOM.Websocket.WebSocket as WS
-import Data.Argonaut (decodeJson, encodeJson, jsonParser)
-import Data.Argonaut.Core (stringify)
 import Data.Array as A
-import Data.Either (Either(..), either)
-import Data.Foldable (foldr, for_)
-import Data.Foreign (F, Foreign, toForeign, readString)
-import Data.List as L
+import Data.Either (Either(..))
+import Data.Foldable (foldr)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (mempty)
 import Data.String as S
-import Data.Tuple (Tuple(..), fst, snd)
-import Data.URI (Query(..), URI(..))
+import Data.Tuple (Tuple(..))
+import Data.URI (Fragment(..), URI(..))
 import Data.URI.URI (parse)
 import Halogen as H
 import Halogen.Aff as HA
@@ -39,10 +27,11 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
-import Network.HTTP.Affjax as AX
-import Tabletop.Config (tabletopUrWebSocket)
-import Tabletop.Message (ChannelInfo(..), SystemMessage(..), TabletopMessage(..), TabletopResponse(..))
-import Tabletop.Message.Ur (NextTurn(..), Player(..), Side(..), UrBoard(..), UrMessage(..), UrResponse(..), UrTabletopMessage, UrTabletopResponse, showPlayer, showTurn)
+
+import Tabletop.Config
+import Tabletop.Connection
+import Tabletop.Message
+import Tabletop.Message.Ur
 
 data UrQuery a
   = MovePiece Int a
@@ -93,7 +82,7 @@ initialState i =
   }
 
 render :: UrState -> H.ComponentHTML UrQuery
-render state = HH.div_ $
+render state = HH.div_
   [ HH.h1_ [ HH.text "The Game of Ur" ]
   , renderScene state
   ]
@@ -223,7 +212,7 @@ renderGame (UrBoard{ black: black@Side{ scored: blackScored }, white: white@Side
           , hasPiece: false
           }
 
-ui :: forall eff. H.Component HH.HTML UrQuery (Maybe String) UrTabletopMessage (Aff (HA.HalogenEffects (ajax :: AX.AJAX, console :: CONSOLE | eff)))
+ui :: forall eff. H.Component HH.HTML UrQuery (Maybe String) UrTabletopMessage (Aff (HA.HalogenEffects (console :: CONSOLE | eff)))
 ui = H.component
   { initialState
   , render
@@ -231,7 +220,7 @@ ui = H.component
   , receiver: const Nothing
   }
 
-eval :: forall eff. UrQuery ~> H.ComponentDSL UrState UrQuery UrTabletopMessage (Aff (HA.HalogenEffects (ajax :: AX.AJAX, console :: CONSOLE | eff)))
+eval :: forall eff. UrQuery ~> H.ComponentDSL UrState UrQuery UrTabletopMessage (Aff (HA.HalogenEffects (console :: CONSOLE | eff)))
 eval = case _ of
   MovePiece p next -> do
     state <- H.get
@@ -295,12 +284,21 @@ eval = case _ of
     pure next
   SetGame board next -> do
     H.modify (_ { mode = GameInProgress Spectator board })
+    state <- H.get
+    case state.connection of
+      Just (ChannelInfo{ uuid }) ->
+        H.liftEff $ do
+          window
+          >>= location
+          >>= setHash uuid
+      Nothing ->
+        H.modify (_ { error = show $ Error "Game UUID is not set." })
     pure next
   SetMessage message next -> do
     H.modify (_ { error = show message })
     pure next
 
-main :: forall eff. Eff (HA.HalogenEffects (ajax :: AX.AJAX, console :: CONSOLE, dom :: DOM | eff)) Unit
+main :: forall eff. Eff (HA.HalogenEffects (console :: CONSOLE, dom :: DOM | eff)) Unit
 main = do
   ws <- WS.create (WS.URL tabletopUrWebSocket) []
   w <- window
@@ -316,40 +314,19 @@ main = do
 
     io <- runUI ui (
       case parse uri of
-        Right (URI _ _ (Just (Query qu)) _) ->
-          L.foldr
-          (\ a b -> case b of
-              Just _ -> b
-              Nothing -> if fst a == "game" then snd a else Nothing
-          ) Nothing qu
+        Right (URI _ _ _ (Just (Fragment f))) ->
+          Just f
         _ ->
           Nothing
       ) element
 
     io.subscribe $ wsSender ws
 
-    CR.runProcess (wsProducer ws CR.$$ wsConsumer io.query)
+    CR.runProcess (wsProducer ws CR.$$ urConsumer io.query)
 
------
-
--- What I'm getting back through the websocket
-wsProducer :: forall eff. WS.WebSocket -> CR.Producer String (Aff (avar :: AV.AVAR, exception :: EXCEPTION, dom :: DOM | eff)) Unit
-wsProducer socket = CRA.produce \emit ->
-  EET.addEventListener WSET.onMessage (listener emit) false (WS.socketToEventTarget socket)
-  where
-    listener emit = EET.eventListener \ev -> do
-      for_ (readHelper WS.readMessageEvent ev) \msgEvent ->
-        for_ (readHelper readString (ME.data_ msgEvent)) \msg ->
-          emit (Left msg)
-
-    readHelper :: forall a b. (Foreign -> F a) -> b -> Maybe a
-    readHelper read =
-      either (const Nothing) Just <<< runExcept <<< read <<< toForeign
-
--- Understanding what I got through the websocket
-wsConsumer :: forall eff. (UrQuery ~> Aff (HA.HalogenEffects eff)) -> CR.Consumer String (Aff (HA.HalogenEffects eff)) Unit
-wsConsumer query = CR.consumer \msg -> do
-  query $ H.action $ case (decodeJson =<< jsonParser msg) :: Either String UrTabletopResponse of
+urConsumer :: forall eff. (UrQuery ~> Aff (HA.HalogenEffects eff)) -> CR.Consumer String (Aff (HA.HalogenEffects eff)) Unit
+urConsumer query = wsConsumer query $ \msg ->
+  case msg of
     Right serverMsg -> case serverMsg of
       SystemResponse chanInfo ->
         SetConnection chanInfo
@@ -376,10 +353,3 @@ wsConsumer query = CR.consumer \msg -> do
         PlayerHasWon player ->
           SetMessage $ Info (showPlayer player <> " has won!")
     Left str -> SetMessage $ Error str
-  pure Nothing
-
--- What I'm sending through the websocket
-wsSender :: forall eff. WS.WebSocket -> CR.Consumer UrTabletopMessage (Aff (HA.HalogenEffects (dom :: DOM | eff))) Unit
-wsSender socket = CR.consumer \msg -> do
-  liftEff $ WS.sendString socket $ stringify $ encodeJson msg
-  pure Nothing
